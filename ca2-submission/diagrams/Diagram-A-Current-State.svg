@@ -1,0 +1,79 @@
+<svg width="900" height="760" viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#1e8449" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="760" fill="#ffffff"/>
+
+  <text x="450" y="35" text-anchor="middle" font-size="22" font-weight="bold" fill="#1a1a1a">Diagram A: Current-State Architecture (CA1 Baseline)</text>
+  <text x="450" y="60" text-anchor="middle" font-size="14" fill="#666">Cloud-native checkout platform on Kubernetes (K3s) — red items = security risks addressed in CA2</text>
+
+  <!-- Client -->
+  <rect x="320" y="85" width="260" height="50" rx="8" fill="#e6f1fb" stroke="#185fa5" stroke-width="1.5"/>
+  <text x="450" y="116" text-anchor="middle" font-size="15" font-weight="bold" fill="#0c447c">Internet Clients</text>
+
+  <line x1="450" y1="135" x2="450" y2="170" stroke="#444" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Gateway -->
+  <rect x="230" y="170" width="440" height="70" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="2"/>
+  <text x="450" y="198" text-anchor="middle" font-size="16" font-weight="bold" fill="#791f1f">GATEWAY — Flask, Port 5000</text>
+  <text x="450" y="220" text-anchor="middle" font-size="12" fill="#a32d2d">Risk: no auth on /api/checkout · runs as root · no resource limits</text>
+
+  <line x1="450" y1="240" x2="450" y2="278" stroke="#444" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="540" y="263" font-size="12" fill="#666">POST /checkout</text>
+
+  <!-- Checkout -->
+  <rect x="270" y="278" width="360" height="70" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="2"/>
+  <text x="450" y="306" text-anchor="middle" font-size="16" font-weight="bold" fill="#791f1f">CHECKOUT — Flask, Port 5001</text>
+  <text x="450" y="328" text-anchor="middle" font-size="12" fill="#a32d2d">Risk: runs as root · no auth to backends · no resource limits</text>
+
+  <!-- arrows to backends -->
+  <line x1="290" y1="348" x2="155" y2="430" stroke="#c0392b" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <line x1="450" y1="348" x2="450" y2="430" stroke="#c0392b" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <line x1="610" y1="348" x2="710" y2="430" stroke="#1e8449" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+  <text x="640" y="395" font-size="12" fill="#1e8449" font-weight="bold">save audit</text>
+
+  <!-- Pricing -->
+  <rect x="55" y="430" width="200" height="92" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="2"/>
+  <text x="155" y="457" text-anchor="middle" font-size="15" font-weight="bold" fill="#791f1f">PRICING — 5002</text>
+  <text x="155" y="480" text-anchor="middle" font-size="12" fill="#444">In-memory price list</text>
+  <text x="155" y="500" text-anchor="middle" font-size="11" fill="#a32d2d">Risk: no auth · root</text>
+
+  <!-- Inventory -->
+  <rect x="350" y="430" width="200" height="92" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="2"/>
+  <text x="450" y="457" text-anchor="middle" font-size="15" font-weight="bold" fill="#791f1f">INVENTORY — 5003</text>
+  <text x="450" y="480" text-anchor="middle" font-size="12" fill="#444">In-memory stock levels</text>
+  <text x="450" y="500" text-anchor="middle" font-size="11" fill="#a32d2d">Risk: no auth · root</text>
+
+  <!-- Postgres -->
+  <rect x="645" y="430" width="200" height="92" rx="8" fill="#faeeda" stroke="#854f0b" stroke-width="2"/>
+  <text x="745" y="457" text-anchor="middle" font-size="15" font-weight="bold" fill="#633806">PostgreSQL — 5432</text>
+  <text x="745" y="480" text-anchor="middle" font-size="12" fill="#444">checkout_audit table</text>
+  <text x="745" y="500" text-anchor="middle" font-size="11" fill="#a32d2d">Risk: root · no NetworkPolicy</text>
+
+  <!-- lateral risk arrow -->
+  <path d="M155 522 L155 545 L745 545 L745 530" fill="none" stroke="#c0392b" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowRed)"/>
+  <path d="M450 522 L450 545" fill="none" stroke="#c0392b" stroke-width="2" stroke-dasharray="6,4"/>
+  <text x="450" y="575" text-anchor="middle" font-size="12" fill="#c0392b" font-weight="bold">Risk: no NetworkPolicy — any pod (e.g. Pricing/Inventory) can reach the database directly</text>
+
+  <!-- storage -->
+  <line x1="745" y1="522" x2="745" y2="565" stroke="#444" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="645" y="590" width="200" height="55" rx="6" fill="#f1efe8" stroke="#888780" stroke-width="1"/>
+  <text x="745" y="613" text-anchor="middle" font-size="12" fill="#444">PVC (1 GB) + K8s Secret</text>
+  <text x="745" y="632" text-anchor="middle" font-size="11" fill="#a32d2d">Risk: secret not encrypted at rest</text>
+
+  <!-- summary box -->
+  <rect x="55" y="665" width="790" height="100" rx="8" fill="#f7f7f5" stroke="#ccc" stroke-width="1"/>
+  <text x="450" y="690" text-anchor="middle" font-size="14" font-weight="bold" fill="#1a1a1a">Data storage summary</text>
+  <text x="75" y="713" font-size="12" fill="#333">Pricing — in-memory price list (SKU-001: 25, SKU-002: 40, SKU-003: 15)</text>
+  <text x="75" y="733" font-size="12" fill="#333">Inventory — in-memory stock levels (SKU-001: 10, SKU-002: 0, SKU-003: 5)</text>
+  <text x="75" y="753" font-size="12" fill="#333">Checkout — writes transaction audit records to PostgreSQL (checkout_audit)</text>
+</svg>

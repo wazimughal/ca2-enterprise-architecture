@@ -1,0 +1,52 @@
+CA2 SECURITY REVIEW - 7 RISKS IDENTIFIED
+
+RISK 1: No Service-to-Service Authentication (HIGH)
+Location: gateway/app.py line 42, checkout/app.py line 37
+Problem: Gateway calls Checkout with only X-Request-Id header (not auth)
+Example: Any pod could call /checkout endpoint without verification
+Fix: Add API key validation (X-Service-Key header)
+
+RISK 2: No NetworkPolicy (HIGH)  
+Location: k8s/app.yaml (no NetworkPolicy resource defined)
+Problem: Any pod can reach any other pod (no traffic restrictions)
+Example: Compromised Pricing pod could directly access PostgreSQL
+Fix: Create NetworkPolicy restricting traffic flows
+
+RISK 3: Running as ROOT (HIGH)
+Location: All k8s deployments (no securityContext defined)
+Problem: Pods run as UID 0 (root)
+Example: If container compromised, attacker gets root access
+Fix: Add securityContext with runAsUser: 1000
+
+RISK 4: No Resource Limits (MEDIUM)
+Location: All k8s deployments (no resources section)
+Problem: Any pod can consume unlimited CPU/memory
+Example: Bug causes infinite loop, crashes entire cluster
+Fix: Add CPU/memory requests and limits
+
+RISK 5: X-Request-Id Spoofing (MEDIUM)
+Location: gateway/app.py line 27
+Problem: Client can set any X-Request-Id value
+Example: Attacker hides their requests in audit logs
+Fix: Gateway generates request-id, don't trust client
+
+RISK 6: Error Message Leakage (MEDIUM)
+Location: checkout/app.py line 63, 73
+Problem: Error messages reveal service names and URLs
+Example: Attacker maps architecture from error messages
+Fix: Return generic errors to clients, log details internally
+
+RISK 7: No Centralized Logging (HIGH)
+Location: All services use print() to stdout only
+Problem: Logs lost if pod crashes, can't search across services
+Example: Can't investigate security incidents
+Fix: Use structured JSON logging + centralized collection (Phase 2)
+
+PRIORITIZATION:
+1st: Service-to-Service Auth (Easy, High Impact)
+2nd: NetworkPolicy (Medium effort, High Impact)
+3rd: Run as Non-Root (Easy, High Impact)
+4th: Resource Limits (Easy, Medium Impact)
+5th: Fix X-Request-Id (Easy, Medium Impact)
+6th: Fix Error Messages (Easy, Medium Impact)
+7th: Logging (Medium, High Impact) - Phase 2 work

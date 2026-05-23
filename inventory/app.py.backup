@@ -1,0 +1,53 @@
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+STOCK = {
+    "SKU-001": 10,
+    "SKU-002": 0,
+    "SKU-003": 5
+}
+
+@app.get("/health")
+def health():
+    return jsonify({"ok": True, "service": "inventory"})
+
+@app.get("/stock/<sku>")
+def stock(sku):
+    request_id = request.headers.get("X-Request-Id", "no-request-id")
+    quantity = request.args.get("quantity", type=int)
+
+    print(f"[inventory] request_id={request_id} sku={sku} quantity={quantity} action=check_stock")
+
+    if quantity is None or quantity <= 0:
+        print(f"[inventory] request_id={request_id} sku={sku} result=invalid_quantity")
+        return jsonify({
+            "ok": False,
+            "request_id": request_id,
+            "error": "quantity must be a positive integer"
+        }), 400
+
+    available = STOCK.get(sku)
+
+    if available is None:
+        print(f"[inventory] request_id={request_id} sku={sku} result=not_found")
+        return jsonify({
+            "ok": False,
+            "request_id": request_id,
+            "error": "SKU not found"
+        }), 404
+
+    stock_available = available >= quantity
+    print(f"[inventory] request_id={request_id} sku={sku} available={available} stock_available={stock_available} result=success")
+
+    return jsonify({
+        "ok": True,
+        "request_id": request_id,
+        "sku": sku,
+        "requested_quantity": quantity,
+        "available_quantity": available,
+        "stock_available": stock_available
+    })
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5003)

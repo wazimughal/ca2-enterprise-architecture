@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-interceptor-proxy
+  namespace: ca2
+spec:
+  type: ExternalName
+  externalName: keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local
+  ports:
+    - port: 8080
+---
+apiVersion: http.keda.sh/v1alpha1
+kind: HTTPScaledObject
+metadata:
+  name: gateway-http
+  namespace: ca2
+spec:
+  hosts:
+    - gateway.local
+  pathPrefixes:
+    - /
+  replicas:
+    min: 0
+    max: 5
+  scaledownPeriod: 60
+  scaleTargetRef:
+    name: gateway
+    kind: Deployment
+    apiVersion: apps/v1
+    service: gateway
+    port: 5000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway-ingress
+  namespace: ca2
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: gateway.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: http-interceptor-proxy
+                port:
+                  number: 8080

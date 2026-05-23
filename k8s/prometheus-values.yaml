@@ -1,0 +1,27 @@
+server:
+  global:
+    scrape_interval: 10s
+  persistentVolume:
+    enabled: false
+extraScrapeConfigs: |
+  - job_name: 'ca2-services'
+    metrics_path: /metrics
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ca2
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: (gateway|checkout|pricing|inventory)
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: service
+alertmanager:
+  enabled: false
+prometheus-pushgateway:
+  enabled: false
+prometheus-node-exporter:
+  enabled: false
+kube-state-metrics:
+  enabled: false

@@ -1,0 +1,84 @@
+graph TB
+    subgraph external["🌐 EXTERNAL (Internet)"]
+        client["Client Browser/API"]
+    end
+    
+    subgraph boundary1["✅ TRUST BOUNDARY 1: Kubernetes External Entry<br/>(Improved)"]
+        ingress["Traefik Ingress<br/>gateway.local:8080<br/>(KEDA HTTP Proxy)<br/>✅ API Key validation<br/>✅ Request logging"]
+    end
+    
+    subgraph cluster["✅ TRUST BOUNDARY 2: Kubernetes Cluster (ca2)<br/>✅ NetworkPolicy enforced - Restricted traffic flows"]
+        subgraph services["Microservices (Hardened)"]
+            gateway["✅ GATEWAY Pod<br/>Port: 5000<br/>Improvements:<br/>✅ Runs as user 1000<br/>✅ API key validation<br/>✅ CPU: 100m-500m<br/>✅ Memory: 128Mi-256Mi<br/>✅ JSON logging<br/>✅ Prometheus metrics"]
+            checkout["✅ CHECKOUT Pod<br/>Port: 5001<br/>Improvements:<br/>✅ Runs as user 1000<br/>✅ Validates X-Service-Key<br/>✅ Resource limits set<br/>✅ Structured logging<br/>✅ Request tracing"]
+            pricing["✅ PRICING Pod<br/>Port: 5002<br/>Improvements:<br/>✅ Runs as user 1000<br/>✅ Requires auth header<br/>✅ Resource limits set<br/>✅ Metrics exported"]
+            inventory["✅ INVENTORY Pod<br/>Port: 5003<br/>Improvements:<br/>✅ Runs as user 1000<br/>✅ Requires auth header<br/>✅ Resource limits set<br/>✅ Metrics exported"]
+        end
+        
+        subgraph policies["Security Policies"]
+            netpol["✅ NetworkPolicy<br/>- Gateway → Checkout,<br/>  Pricing, Inventory<br/>- Checkout → Pricing,<br/>  Inventory, PostgreSQL<br/>- Pricing/Inventory<br/>  isolated (no DB access)<br/>- PostgreSQL only from<br/>  Checkout"]
+        end
+        
+        subgraph data["Data Layer (Hardened)"]
+            postgres["✅ PostgreSQL Pod<br/>Port: 5432<br/>Improvements:<br/>✅ Runs as user 999<br/>✅ No direct access<br/>  (NetworkPolicy blocks)<br/>✅ Only from Checkout<br/>✅ Credentials encrypted<br/>  (Secret encryption)"]
+            pvc["Persistent Volume<br/>(1GB storage)<br/>✅ Encrypted at rest"]
+            secret["✅ K8s Secret<br/>(postgres-secret)<br/>✅ ENCRYPTED in etcd<br/>✅ RBAC access control"]
+        end
+        
+        subgraph observability["Logging & Monitoring"]
+            logs["📊 Structured JSON Logs<br/>- X-Request-Id correlation<br/>- Service name<br/>- Request/Response<br/>- Error tracking<br/>✅ Centralized collection"]
+            metrics["📈 Prometheus Metrics<br/>- Request count<br/>- Request duration<br/>- Error rate<br/>- Resource usage<br/>✅ Grafana dashboard"]
+        end
+        
+        subgraph scaling["Auto-Scaling"]
+            keda["✅ KEDA HTTPScaledObject<br/>Gateway: 0-5 replicas<br/>Scale-to-zero working"]
+        end
+    end
+    
+    subgraph security["Security Testing"]
+        scan["🔍 Image Scanning<br/>✅ Trivy scans<br/>✅ Vulnerability reports<br/>✅ Base image checked"]
+    end
+    
+    %% Data flows - SECURED
+    client -->|HTTP Request<br/>✅ Logged & Monitored| ingress
+    ingress -->|✅ API Key validated| gateway
+    
+    gateway -->|✅ X-Service-Key header<br/>✅ Logged| checkout
+    gateway -->|✅ X-Service-Key header<br/>✅ Logged| pricing
+    gateway -->|✅ X-Service-Key header<br/>✅ Logged| inventory
+    
+    checkout -->|✅ X-Service-Key<br/>✅ NetworkPolicy allows<br/>✅ Logged| pricing
+    checkout -->|✅ X-Service-Key<br/>✅ NetworkPolicy allows<br/>✅ Logged| inventory
+    
+    checkout -->|✅ Only Checkout allowed<br/>✅ NetworkPolicy enforced<br/>✅ Encrypted connection| postgres
+    
+    pricing -.->|🚫 BLOCKED by<br/>NetworkPolicy| postgres
+    inventory -.->|🚫 BLOCKED by<br/>NetworkPolicy| postgres
+    
+    postgres -->|Data stored| pvc
+    secret -->|Encrypted credentials| postgres
+    
+    logs -->|All services log here| metrics
+    metrics -->|Dashboards & alerts| logs
+    
+    netpol -->|Enforces| gateway
+    netpol -->|Enforces| checkout
+    netpol -->|Enforces| pricing
+    netpol -->|Enforces| inventory
+    
+    scan -->|Images verified| services
+    keda -->|Manages replicas| gateway
+    
+    %% Styling
+    classDef safe fill:#44aa44,stroke:#009900,stroke-width:3px,color:#fff
+    classDef improved fill:#66dd66,stroke:#00bb00,stroke-width:2px,color:#000
+    classDef blocked fill:#ff4444,stroke:#cc0000,stroke-width:2px,color:#fff
+    classDef boundary fill:#ccffcc,stroke:#00aa00,stroke-width:2px,color:#000
+    classDef observ fill:#4488ff,stroke:#0066ff,stroke-width:2px,color:#fff
+    
+    class gateway,checkout,pricing,inventory,postgres safe
+    class netpol,keda,secret improved
+    class scan improved
+    class external,boundary1,cluster boundary
+    class logs,metrics observ
+

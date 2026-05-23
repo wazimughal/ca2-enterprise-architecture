@@ -1,0 +1,23 @@
+# NetworkPolicy: Only allow Checkout to connect to PostgreSQL
+# This blocks lateral movement (Pricing/Inventory cannot reach the database)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-allow-checkout-only
+  namespace: ca2
+spec:
+  # This policy applies to the postgres pod
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow incoming traffic ONLY from pods labelled app=checkout
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checkout
+      ports:
+        - protocol: TCP
+          port: 5432

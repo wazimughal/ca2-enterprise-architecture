@@ -1,0 +1,165 @@
+from flask import Flask, jsonify, request
+import os
+import requests
+import psycopg2
+
+app = Flask(__name__)
+
+PRICING_URL = os.getenv("PRICING_URL", "http://localhost:5002")
+INVENTORY_URL = os.getenv("INVENTORY_URL", "http://localhost:5003")
+
+# Database configuration from environment variables
+DB_HOST = os.getenv("DB_HOST", "postgres")
+DB_NAME = os.getenv("DB_NAME", "checkoutdb")
+DB_USER = os.getenv("DB_USER", "checkoutuser")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "checkoutpass")
+DB_PORT = os.getenv("DB_PORT", "5432")
+
+
+def get_db_connection():
+    """Create a connection to PostgreSQL."""
+    return psycopg2.connect(
+        host=DB_HOST,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        port=DB_PORT,
+        connect_timeout=3
+    )
+
+
+def init_db():
+    """Create the checkout_audit table if it does not exist."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS checkout_audit (
+                id SERIAL PRIMARY KEY,
+                request_id VARCHAR(100),
+                sku VARCHAR(50),
+                quantity INTEGER,
+                unit_price INTEGER,
+                total_price INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("[checkout] action=init_db result=success")
+    except Exception as e:
+        print(f"[checkout] action=init_db result=failed error={str(e)}")
+
+
+def save_audit(request_id, sku, quantity, unit_price, total_price):
+    """Save a successful checkout to the audit table."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO checkout_audit
+               (request_id, sku, quantity, unit_price, total_price)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (request_id, sku, quantity, unit_price, total_price)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"[checkout] request_id={request_id} action=audit_saved result=success")
+    except Exception as e:
+        print(f"[checkout] request_id={request_id} action=audit_saved result=failed error={str(e)}")
+
+
+@app.get("/health")
+def health():
+    return jsonify({"ok": True, "service": "checkout"})
+
+
+@app.post("/checkout")
+def checkout():
+    data = request.get_json(silent=True) or {}
+    sku = data.get("sku")
+    quantity = data.get("quantity")
+    request_id = request.headers.get("X-Request-Id", "no-request-id")
+
+    print(f"[checkout] request_id={request_id} action=start_checkout payload={data}")
+
+    if not sku or not isinstance(quantity, int) or quantity <= 0:
+        print(f"[checkout] request_id={request_id} result=invalid_input")
+        return jsonify({
+            "ok": False,
+            "request_id": request_id,
+            "error": "Invalid input. Provide sku and positive integer quantity."
+        }), 400
+
+    try:
+        print(f"[checkout] request_id={request_id} action=call_pricing url={PRICING_URL}/price/{sku}")
+        pricing_res = requests.get(
+            f"{PRICING_URL}/price/{sku}",
+            headers={"X-Request-Id": request_id},
+            timeout=1.5
+        )
+        pricing_res.raise_for_status()
+        pricing_data = pricing_res.json()
+        print(f"[checkout] request_id={request_id} action=pricing_success data={pricing_data}")
+    except requests.RequestException as e:
+        print(f"[checkout] request_id={request_id} action=pricing_failed error={str(e)}")
+        return jsonify({
+            "ok": False,
+            "request_id": request_id,
+            "error": f"Pricing service unavailable: {str(e)}"
+        }), 503
+
+    try:
+        print(f"[checkout] request_id={request_id} action=call_inventory url={INVENTORY_URL}/stock/{sku} quantity={quantity}")
+        inventory_res = requests.get(
+            f"{INVENTORY_URL}/stock/{sku}",
+            params={"quantity": quantity},
+            headers={"X-Request-Id": request_id},
+            timeout=1.5
+        )
+        inventory_res.raise_for_status()
+        inventory_data = inventory_res.json()
+        print(f"[checkout] request_id={request_id} action=inventory_success data={inventory_data}")
+    except requests.RequestException as e:
+        print(f"[checkout] request_id={request_id} action=inventory_failed error={str(e)}")
+        return jsonify({
+            "ok": False,
+            "request_id": request_id,
+            "error": f"Inventory service unavailable: {str(e)}"
+        }), 503
+
+    unit_price = pricing_data["unit_price"]
+    stock_available = inventory_data["stock_available"]
+    total_price = unit_price * quantity
+
+    if not stock_available:
+        print(f"[checkout] request_id={request_id} sku={sku} quantity={quantity} result=insufficient_stock")
+        return jsonify({
+            "ok": False,
+            "request_id": request_id,
+            "sku": sku,
+            "quantity": quantity,
+            "error": "Insufficient stock"
+        }), 409
+
+    # NEW: Save successful checkout to database
+    save_audit(request_id, sku, quantity, unit_price, total_price)
+
+    print(f"[checkout] request_id={request_id} sku={sku} quantity={quantity} total_price={total_price} result=success")
+    return jsonify({
+        "ok": True,
+        "request_id": request_id,
+        "sku": sku,
+        "quantity": quantity,
+        "unit_price": unit_price,
+        "total_price": total_price,
+        "stock_available": stock_available,
+        "message": "Checkout successful"
+    })
+
+
+if __name__ == "__main__":
+    init_db()
+    app.run(host="0.0.0.0", port=5001)

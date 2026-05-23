@@ -1,0 +1,41 @@
+import time
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+PRICE_LIST = {
+    "SKU-001": 25,
+    "SKU-002": 40,
+    "SKU-003": 15
+}
+
+@app.get("/health")
+def health():
+    return jsonify({"ok": True, "service": "pricing"})
+
+@app.get("/price/<sku>")
+def price(sku):
+    request_id = request.headers.get("X-Request-Id", "no-request-id")
+    print(f"[pricing] request_id={request_id} sku={sku} action=lookup_price")
+
+    unit_price = PRICE_LIST.get(sku)
+
+    if unit_price is None:
+        print(f"[pricing] request_id={request_id} sku={sku} result=not_found")
+        return jsonify({
+            "ok": False,
+            "request_id": request_id,
+            "error": "SKU not found"
+        }), 404
+
+    print(f"[pricing] request_id={request_id} sku={sku} unit_price={unit_price} result=success")
+    # time.sleep(2)
+    return jsonify({
+        "ok": True,
+        "request_id": request_id,
+        "sku": sku,
+        "unit_price": unit_price
+    })
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5002)
